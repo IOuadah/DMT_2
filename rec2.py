@@ -60,7 +60,12 @@ def add_time_data(data):
 def add_features(data):
     print("----------Adding new features/columns----------\n")
     data["avg_location_score"] = data[['prop_location_score1', 'prop_location_score2']].mean(axis=1)
-    data['total_price_stay'] = data['price_usd'] * data['srch_length_of_stay']
+    data = data.drop(['prop_location_score1', 'prop_location_score2'],axis = 1)
+
+    data['family'] = (data['srch_children_count'] > 0).astype(int) 
+
+    # data['total_price_stay'] = data['price_usd'] * data['srch_length_of_stay']
+    data['total_price_stay_sqrt'] = np.sqrt((data.pop('price_usd') * data['srch_length_of_stay']))
     return data
 
 def remove_null(data, user_info, metrics):
@@ -98,7 +103,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     data = remove_null(data, user_info=user_info, metrics=metrics)
 
     # data = normalize(data)
-    # data = add_features(data)
+    data = add_features(data)
 
 
     data.sort_values(by=query, inplace=True)
@@ -146,13 +151,13 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         pass
 
     elif ranker == 'gbm':
-        # model = lightgbm.LGBMRanker(objective="lambdarank")
+        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=learning_rate, n_estimators=512,  boosting=boost_method)
         # model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
         #           eval_metric=['ndcg@5'])
 
 
-        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", n_estimators=512, learning_rate=learning_rate, 
-                                    label_gain=[0, 1, 2], seed=42, boosting=boost_method)
+        # model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", n_estimators=512, learning_rate=learning_rate, 
+        #                             label_gain=[0, 1, 2], seed=42, boosting=boost_method)
         
         model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
                   eval_metric=['ndcg@5'])
@@ -177,7 +182,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         subsample=0.8,
         sampling_method="gradient_based",
         # LTR specific parameters
-        objective="rank:ndcg",
+        objective="lambdarank",
         # - Enable bias estimation
         lambdarank_unbiased=True,
         # - normalization (1 / (norm + 1))
