@@ -8,6 +8,7 @@ import argparse
 import pickle as pkl
 import sys
 import os
+import json
 
 
 # import the rankers for learning to rank
@@ -30,7 +31,7 @@ def parse_args():
     parser.add_argument('train_path', help='path to the train data csv file')
     parser.add_argument('test_path', help='path to the test datat csv file')
 
-    parser.add_argument('out_dir', nargs='*',
+    parser.add_argument('out_dir',
                         help='path to an output directory where output is saved')
     parser.add_argument('-r', '--ranker', dest='ranker',
                         choices=['gbm', 'xgb', 'pt', 'tf'], default="gbm")
@@ -99,12 +100,12 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
 
 
     data.sort_values(by=query, inplace=True)
-
+    data.set_index(query, inplace=True)
     
     if train == False:
         return data
     
-    data.set_index(query, inplace=True)
+
 
     features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
@@ -156,10 +157,35 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
 
 
     elif ranker == 'xgb':
-        qid_train = X_train[query]
-        qid_val = X_val[query]
-        model = xgb.XGBRanker(tree_method="hist", device="cuda", lambdarank_pair_method="topk", lambdarank_num_pair_per_sample=13,
-                                eval_metric=["ndcg@5"])
+
+        qid_t = X_train.copy().reset_index()
+        qid_train = qid_t.srch_id
+        qid_v = X_val.copy().reset_index()
+        qid_val = qid_v.srch_id
+
+        X_train = X_train.to_numpy()
+        X_val = X_val.to_numpy()
+
+        model = xgb.XGBRanker(
+        n_estimators=512,
+        tree_method="hist",
+        device="cuda",
+        learning_rate=0.01,
+        reg_lambda=1.5,
+        subsample=0.8,
+        sampling_method="gradient_based",
+        # LTR specific parameters
+        objective="rank:ndcg",
+        # - Enable bias estimation
+        lambdarank_unbiased=True,
+        # - normalization (1 / (norm + 1))
+        lambdarank_bias_norm=1,
+        # - Focus on the top 12 documents
+        lambdarank_num_pair_per_sample=12,
+        lambdarank_pair_method="topk",
+        ndcg_exp_gain=True,
+        eval_metric=["ndcg"]
+    )
 
         model.fit(X_train, y_train, qid=qid_train, eval_set=[(X_val, y_val)], eval_qid=[qid_val], verbose=True)
 
@@ -213,7 +239,7 @@ def predict(test_data, output_dir):
     print("----------Making the predictions----------\n")
     model = pkl.load(open(os.path.join(output_dir, "model.dat"), "rb"))
 
-    test_data = test_data.copy()
+    test_data = test_data.copy().reset_index()
 
     submission = test_data[["srch_id", "prop_id"]]
 
@@ -243,8 +269,8 @@ def main():
 
     ranker = args.ranker
 
-    # output_dir = args.out_dir
-    output_dir = "output"
+    output_dir = args.out_dir
+    # output_dir = "output"
     train_data = load_data(args.train_path)
     # train_data = load_data("data/train_small.csv")
 
