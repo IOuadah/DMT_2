@@ -151,7 +151,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         pass
 
     elif ranker == 'gbm':
-        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=learning_rate, n_estimators=512,  boosting=boost_method)
+        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=0.01, n_estimators=512,  boosting=boost_method)
         # model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
         #           eval_metric=['ndcg@5'])
 
