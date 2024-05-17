@@ -56,9 +56,11 @@ def add_time_data(data):
     return data
     
 
-def add_features():
+def add_features(data):
     print("----------Adding new features/columns----------\n")
-    pass
+    data["avg_location_score"] = data[['prop_location_score1', 'prop_location_score2']].mean(axis=1)
+    data['total_price_stay'] = data['price_usd'] * data['srch_length_of_stay']
+    return data
 
 def remove_null(data, user_info, metrics):
     print("----------Removing columns with NULL > 50%----------\n")
