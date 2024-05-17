@@ -174,7 +174,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         X_val = X_val.to_numpy()
 
         model = xgb.XGBRanker(
-        n_estimators=2048,
+        n_estimators=5000,
         tree_method="hist",
         device="cuda",
         learning_rate=0.01,
@@ -182,13 +182,13 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         subsample=0.8,
         sampling_method="gradient_based",
         # LTR specific parameters
-        objective="lambdarank",
+        objective="rank:ndcg",
         # - Enable bias estimation
         lambdarank_unbiased=True,
         # - normalization (1 / (norm + 1))
         lambdarank_bias_norm=1,
         # - Focus on the top 12 documents
-        lambdarank_num_pair_per_sample=12,
+        lambdarank_num_pair_per_sample=13,
         lambdarank_pair_method="topk",
         ndcg_exp_gain=True,
         eval_metric=["ndcg@5"]
