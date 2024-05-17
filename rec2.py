@@ -174,7 +174,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         X_val = X_val.to_numpy()
 
         model = xgb.XGBRanker(
-        n_estimators=512,
+        n_estimators=2048,
         tree_method="hist",
         device="cuda",
         learning_rate=0.01,
@@ -191,7 +191,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         lambdarank_num_pair_per_sample=12,
         lambdarank_pair_method="topk",
         ndcg_exp_gain=True,
-        eval_metric=["ndcg"]
+        eval_metric=["ndcg@5"]
     )
 
         model.fit(X_train, y_train, qid=qid_train, eval_set=[(X_val, y_val)], eval_qid=[qid_val], verbose=True)
