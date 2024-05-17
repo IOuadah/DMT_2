@@ -10,6 +10,8 @@ import sys
 import os
 
 
+
+
 # import the rankers for learning to rank
 import lightgbm
 
@@ -124,7 +126,7 @@ def val_split(X_data, y_data, val_fraction):
     return X_train, y_train, X_val, y_val
 
 def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning_rate=0.12, boost_method="dart"):
-    # print(type(X_train))
+    print(type(X_train))
     def get_group_size(data):
         g_size = data.reset_index().groupby(query)[query].count().tolist()
         return g_size
@@ -143,25 +145,22 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         pass
 
     elif ranker == 'gbm':
-        # model = lightgbm.LGBMRanker(objective="lambdarank")
+        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=learning_rate, n_estimators=512)
         # model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
         #           eval_metric=['ndcg@5'])
 
 
-        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", n_estimators=512, learning_rate=learning_rate, 
-                                    label_gain=[0, 1, 2], seed=42, boosting=boost_method)
+        # model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", n_estimators=512, learning_rate=learning_rate, 
+        #                             label_gain=[0, 1, 2], seed=42, boosting=boost_method)
         
         model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
                   eval_metric=['ndcg@5'])
 
 
     elif ranker == 'xgb':
-        qid_train = X_train[query]
-        qid_val = X_val[query]
         model = xgb.XGBRanker(tree_method="hist", device="cuda", lambdarank_pair_method="topk", lambdarank_num_pair_per_sample=13,
                                 eval_metric=["ndcg@5"])
-
-        model.fit(X_train, y_train, qid=qid_train, eval_set=[(X_val, y_val)], eval_qid=[qid_val], verbose=True)
+        model.fit(...)
 
     elif ranker == 'pt':
         # ltr_evaluator = ptranking.ltr_adhoc.eval.ltr.LTREvaluator()
