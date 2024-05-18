@@ -117,14 +117,14 @@ def train_catboost(X_train, y_train, X_val, y_val, output_dir, categorical_cols)
     
     parameters = {
         'iterations': 2000,
-        'custom_metric': ['NDCG', "AUC:type=Ranking"],
+        'custom_metric': ['Accuracy', "TotalF1"],
         'verbose': False,
         'random_seed': 42,
         "has_time": True,
         "metric_period": 4,
         "save_snapshot": False,
         "use_best_model": True,
-        'loss_function': 'CrossEntropy'
+        'loss_function': 'MultiClass'
     }
     
     model = CatBoostClassifier(**parameters)
