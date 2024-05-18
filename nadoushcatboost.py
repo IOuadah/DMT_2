@@ -77,6 +77,7 @@ def remove_null(data, user_info, metrics):
 # Preprocessing data
 def preprocess_data(data, ranker, query, metrics, user_info, train=True):
     print("----------Starting Pre-Processing----------\n")
+    print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
         scores = [2, 1]
@@ -84,16 +85,28 @@ def preprocess_data(data, ranker, query, metrics, user_info, train=True):
         metrics = metrics + ["target_score"]
     
     data = add_time_data(data)
+
     data = remove_null(data, user_info=user_info, metrics=metrics)
+
+    # data = normalize(data)
     data = add_features(data)
+
+
     data.sort_values(by=query, inplace=True)
     data.set_index(query, inplace=True)
     
-    if not train:
+    if train == False:
         return data
     
+
+
     features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
+
+    if ranker == 'pt':
+        # from ptranking.eval.parameter import DataSetting, EvalSetting, ModelParameter, ScoringFunctionParameter
+        pass
+    
     return X, y
 
 # Splitting the data
