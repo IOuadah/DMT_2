@@ -9,13 +9,18 @@ import sys
 import os
 import json
 
-# import the rankers for learning to rank
-import lightgbm
-import xgboost as xgb
-import ptranking
-import tensorflow as tf
-import tensorflow_datasets as tfds
-import tensorflow_ranking as tfr
+# Conditional import of the rankers for learning to rank
+def import_ranker(ranker):
+    if ranker == 'gbm':
+        import lightgbm as lgb
+    elif ranker == 'xgb':
+        import xgboost as xgb
+    elif ranker == 'pt':
+        import ptranking
+    elif ranker == 'tf':
+        import tensorflow as tf
+        import tensorflow_datasets as tfds
+        import tensorflow_ranking as tfr
 
 # Additional imports for CatBoost
 from catboost import CatBoostClassifier, Pool
@@ -102,8 +107,13 @@ def val_split(X_data, y_data, val_fraction):
 # Training the CatBoost model
 def train_catboost(X_train, y_train, X_val, y_val, output_dir, categorical_cols):
     print("----------Training the CatBoost model----------\n")
-    train_pool = Pool(data=X_train, label=y_train, cat_features=categorical_cols, group_id=X_train.index)
-    eval_pool = Pool(data=X_val, label=y_val, cat_features=categorical_cols, group_id=X_val.index)
+    
+    # Convert the index to a numpy array
+    group_id_train = X_train.index.to_numpy()
+    group_id_val = X_val.index.to_numpy()
+    
+    train_pool = Pool(data=X_train, label=y_train, cat_features=categorical_cols, group_id=group_id_train)
+    eval_pool = Pool(data=X_val, label=y_val, cat_features=categorical_cols, group_id=group_id_val)
     
     parameters = {
         'iterations': 2000,
@@ -114,10 +124,10 @@ def train_catboost(X_train, y_train, X_val, y_val, output_dir, categorical_cols)
         "metric_period": 4,
         "save_snapshot": False,
         "use_best_model": True,
-        'loss_function': 'YetiRank'
+        'loss_function': 'CrossEntropy'
     }
     
-    model = CatBoost(parameters)
+    model = CatBoostClassifier(**parameters)
     model.fit(train_pool, eval_set=eval_pool, plot=True)
     
     pkl.dump(model, open(os.path.join(output_dir, "catboost_model.dat"), "wb"))
