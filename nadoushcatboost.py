@@ -77,7 +77,6 @@ def remove_null(data, user_info, metrics):
 # Preprocessing data
 def preprocess_data(data, ranker, query, metrics, user_info, train=True):
     print("----------Starting Pre-Processing----------\n")
-    print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
         scores = [2, 1]
@@ -85,22 +84,19 @@ def preprocess_data(data, ranker, query, metrics, user_info, train=True):
         metrics = metrics + ["target_score"]
     
     data = add_time_data(data)
-
     data = remove_null(data, user_info=user_info, metrics=metrics)
-
-    # data = normalize(data)
     data = add_features(data)
-
-
     data.sort_values(by=query, inplace=True)
     data.set_index(query, inplace=True)
     
+    if train:
+        features = data.drop(metrics, axis=1)
+        X, y = features, data["target_score"].values
+        return X, y
+   
     if train == False:
+        data.reset_index(inplace=True)
         return data
-    
-
-
-    features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
 
     if ranker == 'pt':
@@ -149,12 +145,12 @@ def train_catboost(X_train, y_train, X_val, y_val, output_dir, categorical_cols)
 # Prediction function
 def predict(model, test_data, output_dir):
     print("----------Making the predictions----------\n")
-    test_data = test_data.copy().reset_index()
-    submission = test_data[["srch_id", "prop_id"]]
+    submission = test_data[["srch_id", "prop_id"]].copy()
     predictions = model.predict(test_data)
     submission["prediction"] = predictions
     submission = submission.sort_values(["prediction"], ascending=False)
     submission[["srch_id", "prop_id"]].to_csv(os.path.join(output_dir, "submission.csv"), index=False)
+
 
 def main():
     args = parse_args()
@@ -178,7 +174,8 @@ def main():
 
     test_data = load_data(args.test_path)
     test_data = preprocess_data(test_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info, train=False)
-
+    test_data = test_data.reset_index()
+    
     predict(model, test_data, output_dir)
 
 if __name__ == "__main__":
