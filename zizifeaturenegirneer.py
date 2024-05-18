@@ -66,7 +66,7 @@ def add_features(data):
 
     data['total_occupancy'] = data['srch_adults_count'] + data['srch_children_count']
     data['family'] = (data['srch_children_count'] > 0).astype(int)
-    data['total_price_stay_sqrt'] = np.sqrt((data.pop('price_usd') * data['srch_length_of_stay']))
+    data['total_price_stay_sqrt'] = np.sqrt((data['price_usd'] * data['srch_length_of_stay']))
     data['occupants_per_room'] = data['total_occupancy'] / data['srch_room_count']
     return data
 
