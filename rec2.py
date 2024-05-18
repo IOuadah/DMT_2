@@ -94,7 +94,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
-        scores = [2, 1]
+        scores = [5, 1]
         data["target_score"] = np.select(conditions, scores, 0)
         metrics = metrics + ["target_score"]
     
@@ -133,15 +133,14 @@ def val_split(X_data, y_data, val_fraction):
 
 def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning_rate=0.12, boost_method="dart"):
     # print(type(X_train))
-    def get_group_size(data):
-        g_size = data.reset_index().groupby(query)[query].count().tolist()
-        return g_size
-    
-    group_size_train = get_group_size(X_train)
-    group_size_val = get_group_size(X_val)
 
     def get_cat_cols(data):
-        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 'srch_destination_id', "year", "month", "day"]
+        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 
+                        'srch_destination_id', "year", "month", "day"]
+        cat_features_numbers = [data.columns.get_loc(cat) for cat in cat_features if cat in data.columns]
+        return cat_features_numbers
+    
+    cat_features_indx = get_cat_cols(X_train)
 
 
     print("----------Training the model----------\n")  
@@ -151,7 +150,15 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         pass
 
     elif ranker == 'gbm':
-        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=learning_rate, n_estimators=512,  boosting=boost_method)
+        def get_group_size(data):
+            g_size = data.reset_index().groupby(query)[query].count().tolist()
+            return g_size
+        
+        group_size_train = get_group_size(X_train)
+        group_size_val = get_group_size(X_val)
+
+        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=0.01, 
+                                    n_estimators=1024,  boosting=boost_method, )
         # model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
         #           eval_metric=['ndcg@5'])
 
@@ -160,7 +167,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         #                             label_gain=[0, 1, 2], seed=42, boosting=boost_method)
         
         model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
-                  eval_metric=['ndcg@5'])
+                  eval_metric=['ndcg@5'], categorical_feature = cat_features_indx)
 
 
     elif ranker == 'xgb':
