@@ -2,7 +2,6 @@
 
 import pandas as pd
 import numpy as np
-
 import time
 import argparse
 import pickle as pkl
@@ -22,6 +21,9 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_ranking as tfr
 
+# imports for kmeans
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 
 def parse_args():
     "Parses inputs from commandline and returns them as a Namespace object."
@@ -45,6 +47,7 @@ def parse_args():
 def load_data(path):
     print("----------Loading the data----------\n")
     data = pd.read_csv(path)
+    print("----------Data is loaded----------\n")
     return data
 
 def add_time_data(data):
@@ -53,73 +56,116 @@ def add_time_data(data):
     data["year"] = date_time.dt.year
     data["month"] = date_time.dt.month
     data["day"] = date_time.dt.dayofweek
-
+    print("----------Time data is added----------\n")
     return data
     
-
+# Adding custom features 
 def add_features(data):
     print("----------Adding new features/columns----------\n")
     data["avg_location_score"] = data[['prop_location_score1', 'prop_location_score2']].mean(axis=1)
-    data = data.drop(['prop_location_score1', 'prop_location_score2'],axis = 1)
+    data = data.drop(['prop_location_score1', 'prop_location_score2'], axis=1)
 
-    data['family'] = (data['srch_children_count'] > 0).astype(int) 
+    data['total_occupancy'] = data['srch_adults_count'] + data['srch_children_count']
+    data['family'] = (data['srch_children_count'] > 0).astype(int)
+    data['total_price_stay_sqrt'] = np.sqrt((data['price_usd'] * data['srch_length_of_stay']))
+    data['occupants_per_room'] = data['total_occupancy'] / data['srch_room_count']
+    
+    def concat_comp(data):
+        print("----------Concatenating competitor data----------\n")
+        comp_rate = data.drop(['comp1_rate', 'comp2_rate', 'comp3_rate', 'comp4_rate', 'comp5_rate', 'comp6_rate', 'comp7_rate', 'comp8_rate'], axis = 1)
+        comp_inv = data.drop(['comp1_inv', 'comp2_inv', 'comp3_inv', 'comp4_inv', 'comp5_inv', 'comp6_inv', 'comp7_inv', 'comp8_inv'], axis = 1)
+        comp_rate_percent_diff = data.drop(["comp1_rate_percent_diff", "comp2_rate_percent_diff", "comp3_rate_percent_diff", "comp4_rate_percent_diff", 
+                                    "comp5_rate_percent_diff","comp6_rate_percent_diff", "comp6_rate_percent_diff", "comp8_rate_percent_diff"], axis = 1)
+        
+        data['comp_rate'] = comp_rate.mean(axis=1)
+        data['comp_inv'] = comp_inv.mean(axis=1)
+        data['comp_rate_percent_diff'] = comp_rate_percent_diff.mean(axis=1)
 
-    # data['total_price_stay'] = data['price_usd'] * data['srch_length_of_stay']
-    data['total_price_stay_sqrt'] = np.sqrt((data.pop('price_usd') * data['srch_length_of_stay']))
+        return data
+    
+    data = concat_comp(data)
+    print("----------Features are added----------\n")
     return data
 
-def remove_null(data, user_info, metrics):
-    print("----------Removing columns with NULL > 50%----------\n")
+# Feature engineering and clustering
+def feature_engineering(train, test, n_clusters = 8):
+    print("----------Starting Feature Engineering----------\n")
+    selected_features = ['prop_starrating', 'prop_brand_bool',
+                         'prop_log_historical_price', 'price_usd', 'promotion_flag',
+                         'srch_length_of_stay', 'srch_booking_window', 'srch_adults_count',
+                         'srch_children_count', 'srch_room_count', 'srch_saturday_night_bool',
+                         'random_bool', 'total_price_stay_sqrt',
+                         'avg_location_score', 'total_occupancy',
+                         'occupants_per_room']
+    
+    train_select = train[selected_features]
+    test_select = test[selected_features]
+
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    train['cluster'] = kmeans.fit_predict(train_select)
+    test['cluster'] = kmeans.predict(test_select)
+
+    print("----------Feature engineering has finsihed----------\n")
+    
+    return train, test
+
+
+def remove_null(data, user_info, metrics, th):
+    print(f"----------Removing columns with NULL > {th}%----------\n")
     # skip these features cause the null had a meaning 
     skip = user_info + metrics
     
     null_percent = (data.isna().sum() * 100/len(data))
 
-    nulls_to_drop = null_percent[null_percent > 50].index.tolist()
+    nulls_to_drop = null_percent[null_percent > th].index.tolist()
     nulls_to_drop = [null for null in nulls_to_drop if null not in skip]
 
     data_processed = data.drop(nulls_to_drop,axis=1)
+    print(f"----------Columns with NULL > {th}% are removed----------\n")
     return data_processed
 
-def normalize(data):
-    print("----------Normalizing the data----------\n")
-    data = (data - data.mean()) / data.std()
+def impute(data, method):
+    print("----------Imputing missing values----------\n")
+    if method == 'mean':
+        data.fillna(data.mean(), inplace=True)
+    elif method == 'median':
+        data.fillna(data.median(), inplace=True)
+    elif method == 'mode':
+        data.fillna(data.mode(), inplace=True)
+    else:
+        raise ValueError('Imputation method not supported')
+    print("----------Missing values are imputed----------\n")
     return data
 
-# def add_target():
-#     pass
 
 def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print("----------Starting Pre-Processing----------\n")
     print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
-        scores = [5, 1]
+        scores = [2, 1]
         data["target_score"] = np.select(conditions, scores, 0)
         metrics = metrics + ["target_score"]
     
     data = add_time_data(data)
 
-    data = remove_null(data, user_info=user_info, metrics=metrics)
-
-    # data = normalize(data)
-    data = add_features(data)
+    data = remove_null(data, user_info=user_info, metrics=metrics, th=70)
+    data = impute(data, "median")
 
 
     data.sort_values(by=query, inplace=True)
     data.set_index(query, inplace=True)
     
     if train == False:
+        print("----------Test data has been pre processed----------\n")
         return data
     
-
 
     features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
 
-    if ranker == 'pt':
-        # from ptranking.eval.parameter import DataSetting, EvalSetting, ModelParameter, ScoringFunctionParameter
-        pass
+    print("----------Train data has been pre processed----------\n")
+
     
     return X, y
 
@@ -128,20 +174,27 @@ def val_split(X_data, y_data, val_fraction):
     val_size = int(val_fraction * len(X_data))
     X_train, X_val = X_data[:-val_size], X_data[-val_size:]
     y_train, y_val = y_data[:-val_size], y_data[-val_size:]
-
+    print("----------Data has been split----------\n")
     return X_train, y_train, X_val, y_val
 
-def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning_rate=0.12, boost_method="dart"):
-    # print(type(X_train))
+def get_cat_cols(data):
+    cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 
+                    'srch_destination_id', "year", "month", "day"]
+    cat_features_numbers = [data.columns.get_loc(cat) for cat in cat_features if cat in data.columns]
+    return cat_features_numbers
 
-    def get_cat_cols(data):
-        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 
-                        'srch_destination_id', "year", "month", "day"]
-        cat_features_numbers = [data.columns.get_loc(cat) for cat in cat_features if cat in data.columns]
-        return cat_features_numbers
+def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning_rate=0.12, boost_method="dart"):
+    print("----------Starting Training----------\n")
+    # print(type(X_train))
+    def get_group_size(data):
+        g_size = data.reset_index().groupby(query)[query].count().tolist()
+        return g_size
+    
+    group_size_train = get_group_size(X_train)
+    group_size_val = get_group_size(X_val)
+
     
     cat_features_indx = get_cat_cols(X_train)
-
 
     print("----------Training the model----------\n")  
     if ranker == 'kmeans':
@@ -150,15 +203,8 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         pass
 
     elif ranker == 'gbm':
-        def get_group_size(data):
-            g_size = data.reset_index().groupby(query)[query].count().tolist()
-            return g_size
-        
-        group_size_train = get_group_size(X_train)
-        group_size_val = get_group_size(X_val)
-
-        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=0.01, 
-                                    n_estimators=1024,  boosting=boost_method, )
+        print("----------The Ranker is GBM----------\n")
+        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=learning_rate, n_estimators=512,  boosting=boost_method)
         # model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
         #           eval_metric=['ndcg@5'])
 
@@ -171,6 +217,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
 
 
     elif ranker == 'xgb':
+        print("----------The Ranker is XGB----------\n")
 
         qid_t = X_train.copy().reset_index()
         qid_train = qid_t.srch_id
@@ -245,7 +292,14 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
     else:
         raise ValueError('Ranker not supported')
     
+    print("----------Saving the model----------\n")
     pkl.dump(model, open(os.path.join(out_dir, "model.dat"), "wb"))
+
+    print("----------Model has been trained----------\n")
+
+    print("----------GOOD JOB!!----------\n")
+    print("----------PROUD OF YOUUU <3 ----------\n")
+
 
     return model
 
@@ -262,16 +316,27 @@ def predict(test_data, output_dir):
     # categorical_features_numbers = get_categorical_column(test_data)
 
     # print("Predicting on train set with columns: {}".format(test_data.columns.values))
-    # kwargs = {}
-    # kwargs = {"categorical_feature": categorical_features_numbers}
+    cat_features_indx = get_cat_cols(test_data)
 
-    predictions = model.predict(test_data)
+    kwargs = {}
+    kwargs = {"categorical_feature": cat_features_indx}
+
+    predictions = model.predict(test_data, **kwargs)
     submission["prediction"] = predictions
     del test_data
 
     submission = submission.sort_values([ "prediction"], ascending=False)
     print(submission.prediction)
     submission[["srch_id", "prop_id"]].to_csv(os.path.join(output_dir, "submission.csv"), index=False)
+
+    print("----------Submission file has been saved----------\n")
+    print("----------Predictions have been made----------\n")
+
+    print("---------- *\(>__<)/* ----------\n")
+    print("----------YEAAAAAH----------\n")
+    print("----------(^_^)----------\n")
+    print("----------WOOOOHOOOOO----------\n")
+    
 
 
 def main():
@@ -284,10 +349,10 @@ def main():
     ranker = args.ranker
 
     output_dir = args.out_dir
-    # output_dir = "output"
     train_data = load_data(args.train_path)
-    # train_data = load_data("data/train_small.csv")
+    test_data = load_data(args.test_path)
 
+    train_data, test_data = feature_engineering(add_features(train_data), add_features(test_data))
 
     X_train, y_train = preprocess_data(train_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info)
 
@@ -295,7 +360,6 @@ def main():
 
     model = train_model(X_train, y_train, X_val, y_val, ranker, query, output_dir)
 
-    test_data = load_data(args.test_path)
     test_data = preprocess_data(test_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info, train=False)
 
     # test_data = load_data("data/train_small.csv")

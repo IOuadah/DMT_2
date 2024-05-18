@@ -8,8 +8,7 @@ import argparse
 import pickle as pkl
 import sys
 import os
-
-
+import json
 
 
 # import the rankers for learning to rank
@@ -32,7 +31,7 @@ def parse_args():
     parser.add_argument('train_path', help='path to the train data csv file')
     parser.add_argument('test_path', help='path to the test datat csv file')
 
-    parser.add_argument('out_dir', nargs='*',
+    parser.add_argument('out_dir',
                         help='path to an output directory where output is saved')
     parser.add_argument('-r', '--ranker', dest='ranker',
                         choices=['gbm', 'xgb', 'pt', 'tf'], default="gbm")
@@ -58,9 +57,16 @@ def add_time_data(data):
     return data
     
 
-def add_features():
+def add_features(data):
     print("----------Adding new features/columns----------\n")
-    pass
+    data["avg_location_score"] = data[['prop_location_score1', 'prop_location_score2']].mean(axis=1)
+    data = data.drop(['prop_location_score1', 'prop_location_score2'],axis = 1)
+
+    data['family'] = (data['srch_children_count'] > 0).astype(int) 
+
+    # data['total_price_stay'] = data['price_usd'] * data['srch_length_of_stay']
+    data['total_price_stay_sqrt'] = np.sqrt((data.pop('price_usd') * data['srch_length_of_stay']))
+    return data
 
 def remove_null(data, user_info, metrics):
     print("----------Removing columns with NULL > 50%----------\n")
@@ -88,7 +94,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
-        scores = [2, 1]
+        scores = [5, 1]
         data["target_score"] = np.select(conditions, scores, 0)
         metrics = metrics + ["target_score"]
     
@@ -97,16 +103,16 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     data = remove_null(data, user_info=user_info, metrics=metrics)
 
     # data = normalize(data)
-    # data = add_features(data)
+    data = add_features(data)
 
 
     data.sort_values(by=query, inplace=True)
-
+    data.set_index(query, inplace=True)
     
     if train == False:
         return data
     
-    data.set_index(query, inplace=True)
+
 
     features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
@@ -126,16 +132,15 @@ def val_split(X_data, y_data, val_fraction):
     return X_train, y_train, X_val, y_val
 
 def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning_rate=0.12, boost_method="dart"):
-    print(type(X_train))
-    def get_group_size(data):
-        g_size = data.reset_index().groupby(query)[query].count().tolist()
-        return g_size
-    
-    group_size_train = get_group_size(X_train)
-    group_size_val = get_group_size(X_val)
+    # print(type(X_train))
 
     def get_cat_cols(data):
-        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 'srch_destination_id', "year", "month", "day"]
+        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 
+                        'srch_destination_id', "year", "month", "day"]
+        cat_features_numbers = [data.columns.get_loc(cat) for cat in cat_features if cat in data.columns]
+        return cat_features_numbers
+    
+    cat_features_indx = get_cat_cols(X_train)
 
 
     print("----------Training the model----------\n")  
@@ -145,7 +150,15 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         pass
 
     elif ranker == 'gbm':
-        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=learning_rate, n_estimators=512)
+        def get_group_size(data):
+            g_size = data.reset_index().groupby(query)[query].count().tolist()
+            return g_size
+        
+        group_size_train = get_group_size(X_train)
+        group_size_val = get_group_size(X_val)
+
+        model = lightgbm.LGBMRanker(objective="lambdarank", metric="ndcg@5", learning_rate=0.01, 
+                                    n_estimators=1024,  boosting=boost_method, )
         # model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
         #           eval_metric=['ndcg@5'])
 
@@ -154,13 +167,41 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         #                             label_gain=[0, 1, 2], seed=42, boosting=boost_method)
         
         model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
-                  eval_metric=['ndcg@5'])
+                  eval_metric=['ndcg@5'], categorical_feature = cat_features_indx)
 
 
     elif ranker == 'xgb':
-        model = xgb.XGBRanker(tree_method="hist", device="cuda", lambdarank_pair_method="topk", lambdarank_num_pair_per_sample=13,
-                                eval_metric=["ndcg@5"])
-        model.fit(...)
+
+        qid_t = X_train.copy().reset_index()
+        qid_train = qid_t.srch_id
+        qid_v = X_val.copy().reset_index()
+        qid_val = qid_v.srch_id
+
+        X_train = X_train.to_numpy()
+        X_val = X_val.to_numpy()
+
+        model = xgb.XGBRanker(
+        n_estimators=5000,
+        tree_method="hist",
+        device="cuda",
+        learning_rate=0.01,
+        reg_lambda=1.5,
+        subsample=0.8,
+        sampling_method="gradient_based",
+        # LTR specific parameters
+        objective="rank:ndcg",
+        # - Enable bias estimation
+        lambdarank_unbiased=True,
+        # - normalization (1 / (norm + 1))
+        lambdarank_bias_norm=1,
+        # - Focus on the top 12 documents
+        lambdarank_num_pair_per_sample=13,
+        lambdarank_pair_method="topk",
+        ndcg_exp_gain=True,
+        eval_metric=["ndcg@5"]
+    )
+
+        model.fit(X_train, y_train, qid=qid_train, eval_set=[(X_val, y_val)], eval_qid=[qid_val], verbose=True)
 
     elif ranker == 'pt':
         # ltr_evaluator = ptranking.ltr_adhoc.eval.ltr.LTREvaluator()
@@ -212,7 +253,7 @@ def predict(test_data, output_dir):
     print("----------Making the predictions----------\n")
     model = pkl.load(open(os.path.join(output_dir, "model.dat"), "rb"))
 
-    test_data = test_data.copy()
+    test_data = test_data.copy().reset_index()
 
     submission = test_data[["srch_id", "prop_id"]]
 
@@ -242,8 +283,8 @@ def main():
 
     ranker = args.ranker
 
-    # output_dir = args.out_dir
-    output_dir = "output"
+    output_dir = args.out_dir
+    # output_dir = "output"
     train_data = load_data(args.train_path)
     # train_data = load_data("data/train_small.csv")
 
