@@ -71,13 +71,13 @@ def add_features(data):
 
 # Feature engineering and clustering
 def feature_engineering(train, test, n_clusters = 8):
-    selected_features = ['prop_starrating', 'prop_brand_bool', 'prop_location_score1',
+    selected_features = ['prop_starrating', 'prop_brand_bool',
                          'prop_log_historical_price', 'price_usd', 'promotion_flag',
                          'srch_length_of_stay', 'srch_booking_window', 'srch_adults_count',
                          'srch_children_count', 'srch_room_count', 'srch_saturday_night_bool',
-                         'random_bool', 'total_price_stay', 'total_price_stay_sqrt',
-                         'avg_location_score', 'total_occupants', 'adults_per_room',
-                         'children_per_room', 'occupants_per_room']
+                         'random_bool', 'total_price_stay_sqrt',
+                         'avg_location_score', 'total_occupancy',
+                         'occupants_per_room']
     
     train = train[selected_features]
     test = test[selected_features]
