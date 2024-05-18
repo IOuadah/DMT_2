@@ -80,12 +80,12 @@ def feature_engineering(train, test, n_clusters = 8):
                          'avg_location_score', 'total_occupancy',
                          'occupants_per_room']
     
-    train = train[selected_features]
-    test = test[selected_features]
+    train_select = train[selected_features]
+    test_select = test[selected_features]
 
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    train['cluster'] = kmeans.fit_predict(train)
-    test['cluster'] = kmeans.predict(test)
+    train['cluster'] = kmeans.fit_predict(train_select)
+    test['cluster'] = kmeans.predict(test_select)
     
     return train, test
 
@@ -115,7 +115,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
-        scores = [5, 1]
+        scores = [2, 1]
         data["target_score"] = np.select(conditions, scores, 0)
         metrics = metrics + ["target_score"]
     
@@ -124,7 +124,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     data = remove_null(data, user_info=user_info, metrics=metrics)
 
     # data = normalize(data)
-    data = add_features(data)
+    # data = add_features(data)
 
 
     data.sort_values(by=query, inplace=True)
