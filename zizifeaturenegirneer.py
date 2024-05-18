@@ -63,6 +63,7 @@ def add_features(data):
     print("----------Adding new features/columns----------\n")
     data["avg_location_score"] = data[['prop_location_score1', 'prop_location_score2']].mean(axis=1)
     data = data.drop(['prop_location_score1', 'prop_location_score2'], axis=1)
+
     data['total_occupancy'] = data['srch_adults_count'] + data['srch_children_count']
     data['family'] = (data['srch_children_count'] > 0).astype(int)
     data['total_price_stay_sqrt'] = np.sqrt((data.pop('price_usd') * data['srch_length_of_stay']))
@@ -114,7 +115,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
-        scores = [2, 1]
+        scores = [5, 1]
         data["target_score"] = np.select(conditions, scores, 0)
         metrics = metrics + ["target_score"]
     
@@ -297,10 +298,10 @@ def main():
     ranker = args.ranker
 
     output_dir = args.out_dir
-    # output_dir = "output"
     train_data = load_data(args.train_path)
-    # train_data = load_data("data/train_small.csv")
+    test_data = load_data(args.test_path)
 
+    train_data, test_data = feature_engineering(train_data, test_data)
 
     X_train, y_train = preprocess_data(train_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info)
 
@@ -308,7 +309,6 @@ def main():
 
     model = train_model(X_train, y_train, X_val, y_val, ranker, query, output_dir)
 
-    test_data = load_data(args.test_path)
     test_data = preprocess_data(test_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info, train=False)
 
     # test_data = load_data("data/train_small.csv")
