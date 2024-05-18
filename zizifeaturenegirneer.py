@@ -162,8 +162,12 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
     group_size_val = get_group_size(X_val)
 
     def get_cat_cols(data):
-        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 'srch_destination_id', "year", "month", "day"]
-
+        cat_features = ["site_id", 'visitor_location_country_id', 'prop_country_id', 
+                        'srch_destination_id', "year", "month", "day"]
+        cat_features_numbers = [data.columns.get_loc(cat) for cat in cat_features if cat in data.columns]
+        return cat_features_numbers
+    
+    cat_features_indx = get_cat_cols(X_train)
 
     print("----------Training the model----------\n")  
     if ranker == 'kmeans':
@@ -181,7 +185,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         #                             label_gain=[0, 1, 2], seed=42, boosting=boost_method)
         
         model.fit(X_train, y_train, group=group_size_train, eval_set=[(X_val, y_val)], eval_group=[group_size_val],
-                  eval_metric=['ndcg@5'])
+                  eval_metric=['ndcg@5'], categorical_feature = cat_features_indx)
 
 
     elif ranker == 'xgb':
@@ -301,7 +305,7 @@ def main():
     train_data = load_data(args.train_path)
     test_data = load_data(args.test_path)
 
-    train_data, test_data = feature_engineering(train_data, test_data)
+    train_data, test_data = feature_engineering(add_features(train_data), add_features(test_data))
 
     X_train, y_train = preprocess_data(train_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info)
 
