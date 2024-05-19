@@ -72,11 +72,13 @@ def add_features(data):
     
     def concat_comp(data):
         print("----------Concatenating competitor data----------\n")
-        comp_rate = data.drop(['comp1_rate', 'comp2_rate', 'comp3_rate', 'comp4_rate', 'comp5_rate', 'comp6_rate', 'comp7_rate', 'comp8_rate'], axis = 1)
-        comp_inv = data.drop(['comp1_inv', 'comp2_inv', 'comp3_inv', 'comp4_inv', 'comp5_inv', 'comp6_inv', 'comp7_inv', 'comp8_inv'], axis = 1)
+        comp_rate = data.drop(['comp1_rate', 'comp2_rate', 'comp3_rate', 'comp4_rate', 'comp5_rate', 'comp6_rate', 'comp7_rate', 'comp8_rate'], axis = 1).apply(pd.to_numeric, errors='coerce')
+        comp_inv = data.drop(['comp1_inv', 'comp2_inv', 'comp3_inv', 'comp4_inv', 'comp5_inv', 'comp6_inv', 'comp7_inv', 'comp8_inv'], axis = 1).apply(pd.to_numeric, errors='coerce')
         comp_rate_percent_diff = data.drop(["comp1_rate_percent_diff", "comp2_rate_percent_diff", "comp3_rate_percent_diff", "comp4_rate_percent_diff", 
-                                    "comp5_rate_percent_diff","comp6_rate_percent_diff", "comp6_rate_percent_diff", "comp8_rate_percent_diff"], axis = 1)
+                                    "comp5_rate_percent_diff","comp6_rate_percent_diff", "comp6_rate_percent_diff", "comp8_rate_percent_diff"], axis = 1).apply(pd.to_numeric, errors='coerce')
         
+
+
         data['comp_rate'] = comp_rate.mean(axis=1)
         data['comp_inv'] = comp_inv.mean(axis=1)
         data['comp_rate_percent_diff'] = comp_rate_percent_diff.mean(axis=1)
@@ -124,18 +126,18 @@ def remove_null(data, user_info, metrics, th):
     print(f"----------Columns with NULL > {th}% are removed----------\n")
     return data_processed
 
-def impute(data, method):
-    print("----------Imputing missing values----------\n")
-    if method == 'mean':
-        data.fillna(data.mean(), inplace=True)
-    elif method == 'median':
-        data.fillna(data.median(), inplace=True)
-    elif method == 'mode':
-        data.fillna(data.mode(), inplace=True)
-    else:
-        raise ValueError('Imputation method not supported')
-    print("----------Missing values are imputed----------\n")
-    return data
+# def impute(data, method):
+#     print("----------Imputing missing values----------\n")
+#     if method == 'mean':
+#         data.fillna(data.mean(), inplace=True)
+#     elif method == 'median':
+#         data.fillna(data.median(), inplace=True)
+#     elif method == 'mode':
+#         data.fillna(data.mode(), inplace=True)
+#     else:
+#         raise ValueError('Imputation method not supported')
+#     print("----------Missing values are imputed----------\n")
+#     return data
 
 
 def preprocess_data(data, ranker, query, metrics, user_info, train = True):
@@ -150,7 +152,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     data = add_time_data(data)
 
     data = remove_null(data, user_info=user_info, metrics=metrics, th=70)
-    data = impute(data, "median")
+    # data = impute(data, "median")
 
 
     data.sort_values(by=query, inplace=True)
@@ -303,7 +305,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
 
     return model
 
-def predict(test_data, output_dir):
+def predict(test_data, output_dir, ranker):
     print("----------Making the predictions----------\n")
     model = pkl.load(open(os.path.join(output_dir, "model.dat"), "rb"))
 
@@ -318,10 +320,14 @@ def predict(test_data, output_dir):
     # print("Predicting on train set with columns: {}".format(test_data.columns.values))
     cat_features_indx = get_cat_cols(test_data)
 
-    kwargs = {}
-    kwargs = {"categorical_feature": cat_features_indx}
+    if ranker == "gbm":
+        kwargs = {}
+        kwargs = {"categorical_feature": cat_features_indx}
 
-    predictions = model.predict(test_data, **kwargs)
+        predictions = model.predict(test_data, **kwargs)
+    else:
+        predictions = model.predict(test_data)
+
     submission["prediction"] = predictions
     del test_data
 
