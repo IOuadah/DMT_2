@@ -97,6 +97,15 @@ def preprocess_data(data, ranker, query, metrics, user_info, train=True):
     if train == False:
         data.reset_index(inplace=True)
         return data
+    
+    # Handle NaN values in categorical features by converting them to strings
+    categorical_cols = ['prop_id', "srch_destination_id", "year", "month", "day"]
+    for col in categorical_cols:
+        data[col] = data[col].astype(str)
+        # Convert NaN values to a string placeholder
+        data[col].fillna("NaN", inplace=True)
+
+    features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
 
     if ranker == 'pt':
