@@ -128,18 +128,18 @@ def remove_null(data, user_info, metrics, th):
     print(f"----------Columns with NULL > {th}% are removed----------\n")
     return data_processed
 
-# def impute(data, method):
-#     print("----------Imputing missing values----------\n")
-#     if method == 'mean':
-#         data.fillna(data.mean(), inplace=True)
-#     elif method == 'median':
-#         data.fillna(data.median(), inplace=True)
-#     elif method == 'mode':
-#         data.fillna(data.mode(), inplace=True)
-#     else:
-#         raise ValueError('Imputation method not supported')
-#     print("----------Missing values are imputed----------\n")
-#     return data
+def impute(data, method):
+    print("----------Imputing missing values----------\n")
+    if method == 'mean':
+        data.fillna(data.mean(), inplace=True)
+    elif method == 'median':
+        data.fillna(data.median(), inplace=True)
+    elif method == 'mode':
+        data.fillna(data.mode(), inplace=True)
+    else:
+        raise ValueError('Imputation method not supported')
+    print("----------Missing values are imputed----------\n")
+    return data
 
 # def remove_outliers(data):
 #     print("----------Removing outliers----------\n")
@@ -162,14 +162,14 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print(data.columns)
     if train:
         conditions = [data["booking_bool"] == 1, data["click_bool"] == 1]
-        scores = [2, 1]
+        scores = [5, 1]
         data["target_score"] = np.select(conditions, scores, 0)
         metrics = metrics + ["target_score"]
     
     data = add_time_data(data)
 
     data = remove_null(data, user_info=user_info, metrics=metrics, th=70)
-    # data = impute(data, "median")
+    data = impute(data, "mean")
 
 
     data.sort_values(by=query, inplace=True)
@@ -247,7 +247,7 @@ def train_model(X_train, y_train, X_val, y_val, ranker, query, out_dir, learning
         X_val = X_val.to_numpy()
 
         model = xgb.XGBRanker(
-        n_estimators=5000,
+        n_estimators=1048,
         tree_method="hist",
         device="cuda",
         learning_rate=0.01,
