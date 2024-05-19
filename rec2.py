@@ -128,16 +128,18 @@ def remove_null(data, user_info, metrics, th):
     print(f"----------Columns with NULL > {th}% are removed----------\n")
     return data_processed
 
-def impute(data, method):
+def impute(data, user_info, metrics):
     print("----------Imputing missing values----------\n")
-    if method == 'mean':
-        data.fillna(data.mean(), inplace=True)
-    elif method == 'median':
-        data.fillna(data.median(), inplace=True)
-    elif method == 'mode':
-        data.fillna(data.mode(), inplace=True)
-    else:
-        raise ValueError('Imputation method not supported')
+    skip = user_info + metrics
+    # impute columns if they are not in skip
+    for col in data.columns:
+        if col not in skip:
+            if is_numeric_dtype(data[col]) == True:
+                data[col] = data[col].fillna(data[col].mean())
+            else:
+                data[col] = data[col].fillna(data[col].mode()[0])
+        else:
+            continue
     print("----------Missing values are imputed----------\n")
     return data
 
@@ -169,7 +171,7 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     data = add_time_data(data)
 
     data = remove_null(data, user_info=user_info, metrics=metrics, th=70)
-    data = impute(data, "mean")
+    data = impute(data, user_info=user_info, metrics=metrics)
 
 
     data.sort_values(by=query, inplace=True)
