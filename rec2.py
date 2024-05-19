@@ -386,7 +386,7 @@ def main():
     test_data = preprocess_data(test_data, ranker=ranker, query=query, metrics=metrics, user_info=user_info, train=False)
 
     # test_data = load_data("data/train_small.csv")
-    predict(test_data, output_dir)
+    predict(test_data, output_dir, ranker)
 
 if __name__ == "__main__":
     main()
