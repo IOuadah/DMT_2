@@ -72,22 +72,22 @@ def add_features(data):
     data['total_price_stay_sqrt'] = np.sqrt((data['price_usd'] * data['srch_length_of_stay']))
     data['occupants_per_room'] = data['total_occupancy'] / data['srch_room_count']
     
-    def concat_comp(data):
-        print("----------Concatenating competitor data----------\n")
-        comp_rate = data.drop(['comp1_rate', 'comp2_rate', 'comp3_rate', 'comp4_rate', 'comp5_rate', 'comp6_rate', 'comp7_rate', 'comp8_rate'], axis = 1).apply(pd.to_numeric, errors='coerce')
-        comp_inv = data.drop(['comp1_inv', 'comp2_inv', 'comp3_inv', 'comp4_inv', 'comp5_inv', 'comp6_inv', 'comp7_inv', 'comp8_inv'], axis = 1).apply(pd.to_numeric, errors='coerce')
-        comp_rate_percent_diff = data.drop(["comp1_rate_percent_diff", "comp2_rate_percent_diff", "comp3_rate_percent_diff", "comp4_rate_percent_diff", 
-                                    "comp5_rate_percent_diff","comp6_rate_percent_diff", "comp6_rate_percent_diff", "comp8_rate_percent_diff"], axis = 1).apply(pd.to_numeric, errors='coerce')
+    # def concat_comp(data):
+    #     print("----------Concatenating competitor data----------\n")
+    #     comp_rate = data.drop(['comp1_rate', 'comp2_rate', 'comp3_rate', 'comp4_rate', 'comp5_rate', 'comp6_rate', 'comp7_rate', 'comp8_rate'], axis = 1).apply(pd.to_numeric, errors='coerce')
+    #     comp_inv = data.drop(['comp1_inv', 'comp2_inv', 'comp3_inv', 'comp4_inv', 'comp5_inv', 'comp6_inv', 'comp7_inv', 'comp8_inv'], axis = 1).apply(pd.to_numeric, errors='coerce')
+    #     comp_rate_percent_diff = data.drop(["comp1_rate_percent_diff", "comp2_rate_percent_diff", "comp3_rate_percent_diff", "comp4_rate_percent_diff", 
+    #                                 "comp5_rate_percent_diff","comp6_rate_percent_diff", "comp6_rate_percent_diff", "comp8_rate_percent_diff"], axis = 1).apply(pd.to_numeric, errors='coerce')
         
 
 
-        data['comp_rate'] = comp_rate.mean(axis=1)
-        data['comp_inv'] = comp_inv.mean(axis=1)
-        data['comp_rate_percent_diff'] = comp_rate_percent_diff.mean(axis=1)
+    #     data['comp_rate'] = comp_rate.mean(axis=1)
+    #     data['comp_inv'] = comp_inv.mean(axis=1)
+    #     data['comp_rate_percent_diff'] = comp_rate_percent_diff.mean(axis=1)
 
-        return data
+    #     return data
     
-    data = concat_comp(data)
+    # data = concat_comp(data)
     print("----------Features are added----------\n")
     return data
 
