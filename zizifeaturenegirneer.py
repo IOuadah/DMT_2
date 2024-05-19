@@ -89,26 +89,19 @@ def feature_engineering(train, test, n_clusters = 8):
     
     return train, test
 
-def remove_null(data, user_info, metrics):
-    print("----------Removing columns with NULL > 50%----------\n")
+def remove_null(data, user_info, metrics, th):
+    print(f"----------Removing columns with NULL > {th}%----------\n")
     # skip these features cause the null had a meaning 
     skip = user_info + metrics
     
     null_percent = (data.isna().sum() * 100/len(data))
 
-    nulls_to_drop = null_percent[null_percent > 50].index.tolist()
+    nulls_to_drop = null_percent[null_percent > th].index.tolist()
     nulls_to_drop = [null for null in nulls_to_drop if null not in skip]
 
     data_processed = data.drop(nulls_to_drop,axis=1)
     return data_processed
 
-def normalize(data):
-    print("----------Normalizing the data----------\n")
-    data = (data - data.mean()) / data.std()
-    return data
-
-# def add_target():
-#     pass
 
 def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     print("----------Starting Pre-Processing----------\n")
@@ -121,10 +114,8 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     
     data = add_time_data(data)
 
-    data = remove_null(data, user_info=user_info, metrics=metrics)
+    data = remove_null(data, user_info=user_info, metrics=metrics, th=70)
 
-    # data = normalize(data)
-    # data = add_features(data)
 
 
     data.sort_values(by=query, inplace=True)
@@ -138,10 +129,6 @@ def preprocess_data(data, ranker, query, metrics, user_info, train = True):
     features = data.drop(metrics, axis=1)
     X, y = features, data["target_score"].values
 
-    if ranker == 'pt':
-        # from ptranking.eval.parameter import DataSetting, EvalSetting, ModelParameter, ScoringFunctionParameter
-        pass
-    
     return X, y
 
 def val_split(X_data, y_data, val_fraction):
