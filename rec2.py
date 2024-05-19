@@ -1,6 +1,8 @@
 # imports
 
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
+
 import numpy as np
 import time
 import argparse
@@ -138,6 +140,21 @@ def remove_null(data, user_info, metrics, th):
 #         raise ValueError('Imputation method not supported')
 #     print("----------Missing values are imputed----------\n")
 #     return data
+
+# def remove_outliers(data):
+#     print("----------Removing outliers----------\n")
+#     for col in data.columns:
+#         if is_numeric_dtype(data[col]) == True:
+#             mean = data[col].mean()
+#             std = data[col].std()
+#             cut_off = std * 3
+#             lower_bound, upper_bound = mean - cut_off, mean + cut_off
+#             outliers_removed_df = data[(data[col] < upper_bound) & (data[col] > lower_bound)]
+#         else:
+#             continue
+    
+#     print("----------Outliers are removed----------\n")
+#     return outliers_removed_df
 
 
 def preprocess_data(data, ranker, query, metrics, user_info, train = True):
